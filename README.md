@@ -8,4 +8,4 @@ The original fastq files were downloaded using the SRA Toolkit and the BioProjec
 
 Due to the very high quality of the sequencing data, no pre-processing of the resulting reads was necessary. 
 
-The genome mapping was planned to be performed using QuasR and the Rhisat2 aligner and the "BSgenome.Hsapiens.NCBI.GRCh38" genome as a reference (see script). Due to the high computational requirements and the fact that the sequencing reads were of exceptionally high quality, this step was omitted and the normalized count tables with FPKM values were downloaded from the GEO database.
+The genome mapping was performed using SALMON.
