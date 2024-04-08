@@ -1,0 +1,84 @@
+---
+title: "Differential Gene Expression Analysis"
+output: html_notebook
+---
+```{r}
+# Import libraries
+library(tximeta)
+library(DESeq2)
+library(pheatmap)
+library(stats)
+library(ggplot2)
+library(ggfortify)
+```
+
+# Data processing
+
+```{r}
+# Read column data
+col_data = read.csv("run_table.txt", stringsAsFactors=FALSE)
+
+# Rename run column
+col_data$names = col_data$Run
+
+# Add file paths to quant.sf files
+col_data$files = file.path(
+  "raw_sequence_Data", 
+  "quants", 
+  paste(col_data$names, "_quant", sep=""), 
+  "quant.sf")
+
+# Add condition column
+col_data$condition = ifelse(grepl("with FA", col_data$source_name), "+FA", "-FA")
+```
+
+```{r}
+# Run tximeta to obtain metadata
+meta_data = tximeta(col_data)
+
+# Convert transcript to gene-level data
+gene_data = summarizeToGene(meta_data)
+
+# Check
+head(gene_data)
+```
+
+# Exploratory analysis with TPM values
+
+```{r}
+# Extract TPM values
+tpm_values = assay(gene_data, 2)
+
+# Select 100 genes with highest variance between samples
+gene_var = apply(tpm_values, 1, var)
+selected_genes = names(gene_var[order(gene_var, decreasing= TRUE)[1:100]])
+
+# Reshape conditions
+annotations = data.frame(group=rep(c("+FA", "-FA"), each=3))
+row.names(annotations) = colnames(tpm_values[selected_genes, ])
+
+# Cluster 100 most variant genes
+pheatmap(tpm_values[selected_genes, ], 
+         scale="row", 
+         show_rownames=FALSE, 
+         annotation_col = annotations,
+         angle_col = 45,
+         main="TPM values"
+         )
+```
+
+```{r}
+# Transpose matrix of 100 most variant genes
+transposed_mat = t(tpm_values[selected_genes, ])
+
+# Perform PCA on TPM values
+pca_tpm = prcomp(transposed_mat)
+
+# Plot PCA results
+autoplot(pca_tpm, 
+         data=col_data, 
+         colour="condition")
+```
+# Differential expression analysis
+
+
