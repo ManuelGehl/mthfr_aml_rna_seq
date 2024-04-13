@@ -1,5 +1,7 @@
 # MTHFR RNA-seq analysis
 
+The "MTHFR RNA-seq analysis" project explored gene expression differences across two cell lines, IMS-M2 and U937, under varying growth conditions. High-quality sequencing data revealed distinct expression profiles primarily influenced by cell line rather than growth condition. Differential expression analysis identified thousands of significant gene changes, particularly under folic acid withdrawal.
+
 ## Raw data and base calling quality control
 
 The original fastq files were downloaded using the SRA Toolkit and the BioProject accession number PRJNA639365. The pair-ended reads were evaluated using FASTQC, which showed an overall high quality of the sequencing experiments (see [reports](https://github.com/ManuelGehl/mthfr_aml_rna_seq/tree/main/qc_reports_reads)).
@@ -57,4 +59,7 @@ Table 1 presents the top 10 differentially expressed genes between both cell lin
 | ENSG00000078098.15| 1.98           | 2.77E-05           | 7.49E-04           | FAP     |
 | ENSG00000073737.17| 1.93           | 2.17E-06           | 9.20E-05           | DHRS9   |
 
+## Reference
+
+Su, Angela, Frank Ling, Camille Vaganay, Gaetano Sodaro, Chaïma Benaksas, Reinaldo Dal Bello, Antoine Forget, u. a. „The Folate Cycle Enzyme MTHFR Is a Critical Regulator of Cell Response to MYC-Targeting Therapies“. Cancer Discovery 10, Nr. 12 (1. Dezember 2020): 1894–1911. https://doi.org/10.1158/2159-8290.CD-19-0970.
 
