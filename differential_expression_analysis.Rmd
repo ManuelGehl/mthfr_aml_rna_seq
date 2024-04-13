@@ -1,7 +1,11 @@
 ---
-title: "Differential Gene Expression Analysis"
-output: html_notebook
+title: "Differential Gene Expression Analysis of IMS-M2 and U937"
+output:
+  html_document:
+    df_print: paged
 ---
+
+
 ```{r}
 # Import libraries
 library(tximeta)
@@ -10,13 +14,19 @@ library(pheatmap)
 library(stats)
 library(ggplot2)
 library(ggfortify)
+library(AnnotationDbi)
+library(EnsDb.Hsapiens.v86)
+library(apeglm)
+library(EDASeq)
 ```
+
 
 # Data processing
 
+
 ```{r}
 # Read column data
-col_data = read.csv("run_table.txt", stringsAsFactors=FALSE)
+col_data = read.table("run_table.txt", stringsAsFactors=TRUE, sep=",", header=TRUE)
 
 # Rename run column
 col_data$names = col_data$Run
@@ -24,13 +34,22 @@ col_data$names = col_data$Run
 # Add file paths to quant.sf files
 col_data$files = file.path(
   "raw_sequence_Data", 
-  "quants", 
-  paste(col_data$names, "_quant", sep=""), 
+  "salmon_output", 
+  col_data$names, 
   "quant.sf")
 
 # Add condition column
-col_data$condition = ifelse(grepl("with FA", col_data$source_name), "+FA", "-FA")
+col_data$condition = ifelse(grepl("with FA", col_data$source_name), "FA", "no_FA")
+
+# Rename IMS-M2 cells to IMS_M2 and cast to factor
+col_data$cell_line = ifelse(grepl("IMS-M2", col_data$source_name), "IMS_M2", "U937")
+col_data$cell_line = as.factor(col_data$cell_line)
+
+# Change condition to factor
+col_data$condition = factor(col_data$condition)
 ```
+
+
 
 ```{r}
 # Run tximeta to obtain metadata
@@ -39,46 +58,293 @@ meta_data = tximeta(col_data)
 # Convert transcript to gene-level data
 gene_data = summarizeToGene(meta_data)
 
+# Relevel condition column
+gene_data$condition = relevel(gene_data$condition, ref = "FA")
+
+# Filter out rows with less than 10 counts in total
+print(nrow(gene_data))
+gene_data = gene_data[rowSums(assay(gene_data, "counts")) > 10, ]
+print(nrow(gene_data))
+
 # Check
-head(gene_data)
+gene_data
+
+# Create DESeq dataset
+deseq_dataset = DESeqDataSet(se=gene_data, design = ~ condition)
+
+# Check
+deseq_dataset
 ```
 
-# Exploratory analysis with TPM values
+
+# Exploratory Data Analysis
+
+
 
 ```{r}
-# Extract TPM values
-tpm_values = assay(gene_data, 2)
+# Create variance-stabilized dataset for clustering
+vst_dataset = vst(deseq_dataset, blind=FALSE)
 
-# Select 100 genes with highest variance between samples
-gene_var = apply(tpm_values, 1, var)
-selected_genes = names(gene_var[order(gene_var, decreasing= TRUE)[1:100]])
+# Calculate sample distances
+sample_dist = dist(t(assay(vst_dataset)))
 
-# Reshape conditions
-annotations = data.frame(group=rep(c("+FA", "-FA"), each=3))
-row.names(annotations) = colnames(tpm_values[selected_genes, ])
+# Construct heatmap
+sample_dist_mat = as.matrix(sample_dist)
+rownames(sample_dist_mat) = paste(vst_dataset$condition, vst_dataset$cell_line, sep = " - ")
+colnames(sample_dist_mat) = rownames(sample_dist_mat)
 
-# Cluster 100 most variant genes
-pheatmap(tpm_values[selected_genes, ], 
-         scale="row", 
-         show_rownames=FALSE, 
-         annotation_col = annotations,
-         angle_col = 45,
-         main="TPM values"
-         )
+pheatmap(
+  sample_dist_mat,
+  clustering_distance_rows = sample_dist,
+  clustering_distance_cols = sample_dist,
+  angle_col = 45,
+  main = "Distances between samples",
+)
 ```
 
 ```{r}
-# Transpose matrix of 100 most variant genes
-transposed_mat = t(tpm_values[selected_genes, ])
+# Select 500 genes with highest variance between samples
+gene_var = apply(assay(vst_dataset), 1, var)
+selected_genes = names(gene_var[order(gene_var, decreasing= TRUE)[1:500]])
 
-# Perform PCA on TPM values
-pca_tpm = prcomp(transposed_mat)
+# Transpose matrix of most variant genes
+transposed_mat = t(assay(vst_dataset[selected_genes, ]))
+
+# Perform PCA on VST values
+pca_vst = prcomp(transposed_mat)
 
 # Plot PCA results
-autoplot(pca_tpm, 
-         data=col_data, 
-         colour="condition")
+autoplot(
+  pca_vst, 
+  data=col_data, 
+  colour="condition",
+  shape="cell_line"
+  ) +
+  theme_minimal() +
+  ggtitle("PCA of 500 most variant genes") +
+  theme(plot.title = element_text(hjust = 0.5))
 ```
+
 # Differential expression analysis
+
+Most of the variation in gene expression actually comes from the cell lines rather than the absence or presence of folic acid. The expression profiles of the IMS-M2 cell line are very similar regardless of folic acid, whereas the differences for the U937 cell line are profound.
+
+```{r}
+# Change design formula to account for cell lines
+deseq_dataset = DESeqDataSet(se=gene_data, design = ~ cell_line + condition)
+
+# Perform DEA
+deseq_dataset = DESeq(deseq_dataset)
+```
+
+
+```{r}
+# Extract results
+dea_results = results(deseq_dataset, contrast=c("condition", "no_FA", "FA"))
+
+# Get summary
+summary(dea_results)
+
+# Extract results with FDR < 0.05
+dea_results = results(deseq_dataset, contrast=c("condition", "no_FA", "FA"), alpha=0.05)
+
+# Get summary
+summary(dea_results)
+
+# Continue with FDR threshold of 0.05
+dea_results = results(deseq_dataset, contrast=c("condition", "no_FA", "FA"), alpha=0.05)
+```
+
+In general, more genes are upregulated than downregulated in the absence of folic acid. Furthermore, most genes are moderately differentially expressed and only 5 genes show an absolute change in expression of more than twofold.
+
+```{r}
+# Construct volcano plot
+ggplot(
+  dea_results, 
+  aes(x = log2FoldChange, y = -log10(padj))) +
+  geom_point(color = ifelse(dea_results$padj < 0.05 & abs(dea_results$log2FoldChange) > 1, 
+                            "red", "black"), size = 2) +
+  labs(title = "Volcano Plot",
+       x = "Log2 Fold Change",
+       y = "-Log10(FDR)") +
+  theme_minimal() +
+  xlim(-10, 10)
+
+# Create MA plot with shrinking
+results_shr = lfcShrink(deseq_dataset, coef="condition_no_FA_vs_FA", type="apeglm")
+plotMA(
+  results_shr,
+  main = "MA plot",
+  xlab = "Mean of normalized counts",
+  ylab = "LFC",
+  ylim = c(-5, 5)
+  )
+
+# Check distribution of pvalues
+hist(
+  dea_results$pvalue,
+  main = "Distribution of p-values",
+  xlab = "p-value"
+  )
+
+# Plot Relative Log Expression plot
+par(mfrow = c(1, 2))
+EDASeq::plotRLE(
+  counts(deseq_dataset), 
+  outline=FALSE, 
+  ylim=c(-4, 4), 
+  col=as.numeric(col_data$condition), 
+  main = 'Raw Counts'
+  )
+
+EDASeq::plotRLE(
+  counts(deseq_dataset, normalized = TRUE), 
+  outline=FALSE, ylim=c(-4, 4), 
+  col = as.numeric(col_data$condition), 
+  main = 'Normalized Counts'
+  )
+```
+
+
+```{r}
+# Extract ensemble-ids
+ensemble_ids = substr(rownames(dea_results), 1,15)
+
+# Map gene symbols and entrez-ids to results
+dea_results$symbol = mapIds(
+  EnsDb.Hsapiens.v86,
+  keys=ensemble_ids,
+  column="SYMBOL",
+  keytype="GENEID",
+  multiVals="first")
+
+dea_results$entrez = mapIds(
+  EnsDb.Hsapiens.v86,
+  keys=ensemble_ids,
+  column="ENTREZID",
+  keytype="GENEID",
+  multiVals="first")
+
+# Check
+head(dea_results)
+```
+
+```{r}
+# Remove genes with NA adjusted p values
+print(dim(dea_results))
+dea_results_filtered = dea_results[!is.na(dea_results$padj), ]
+print(dim(dea_results_filtered))
+
+# Select genes with adjusted pvalues below 0.05
+dea_results_filtered = dea_results_filtered[dea_results_filtered$padj < 0.05, ]
+print(dim(dea_results_filtered))
+
+# Select genes with absolute log2 fold change above 1
+dea_results_filtered = dea_results_filtered[abs(dea_results_filtered$log2FoldChange) > 1, ]
+print(dim(dea_results_filtered))
+
+# Replace NA symbols with the respective ESG number
+dea_results_filtered$symbol = ifelse(is.na(dea_results_filtered$symbol), rownames(dea_results_filtered), dea_results_filtered$symbol)
+```
+```{r}
+# Construct pca and heatmap based on 99 selected genes
+selected_genes = rownames(dea_results_filtered)
+
+# Transpose matrix of most variant genes
+transposed_mat = t(assay(vst_dataset[selected_genes, ]))
+
+# Perform PCA on VST values
+pca_vst = prcomp(transposed_mat)
+
+# Plot PCA results
+autoplot(pca_vst, 
+         data=col_data, 
+         colour="condition",
+         shape="cell_line") +
+         theme_minimal() +
+         ggtitle("PCA of differentially expressed genes") +
+         theme(plot.title = element_text(hjust = 0.5))
+
+# Plot heatmap
+anno = as.data.frame(colData(deseq_dataset) [, c("condition", "cell_line")])
+rownames(anno) = rownames(colData(deseq_dataset))
+
+pheatmap(
+  assay(vst_dataset[selected_genes, ]),
+  annotation_col = anno,
+  show_rownames = FALSE,
+  angle_col = 45,
+  cutree_rows = 2,
+  cutree_cols = 2,
+  scale = "row"
+)
+```
+
+
+```{r}
+# Cluster genes
+ims_m2_data  = assay(vst_dataset)[rownames(dea_results_filtered), 1:6]
+rownames(ims_m2_data) = dea_results_filtered$symbol
+u937_data = assay(vst_dataset)[rownames(dea_results_filtered), 7:12]
+rownames(u937_data) = dea_results_filtered$symbol
+
+# Calculate z scores
+calc_z_score = function(x){
+  if(sd(x) > 0) {
+    return((x - mean(x)) / sd(x))
+  }
+  else {
+    return(rep(0, length(x)))
+  }
+}
+
+ims_m2_data  = t(apply(ims_m2_data, 1, calc_z_score))
+u937_data  = t(apply(u937_data, 1, calc_z_score))
+
+# Add column names
+colnames(ims_m2_data) = colnames(vst_dataset)[1:6]
+colnames(u937_data) = colnames(vst_dataset)[7:12]
+
+# Define annotation column and plot
+anno = as.data.frame(colData(deseq_dataset) [, c("condition","cell_line")])
+ims_map = pheatmap(
+  ims_m2_data, 
+  annotation_col = anno,
+  angle_col = 45,
+  cutree_rows = 2,
+  cutree_cols = 2,
+  #cellheight = 15,
+  #filename = "ims_heatmap.png"
+  )
+
+pheatmap(
+  u937_data, 
+  annotation_col = anno,
+  angle_col = 45,
+  cutree_rows = 2,
+  cutree_cols = 2,
+  #cellheight = 15,
+  #filename = "u937_heatmap.png"
+  )
+```
+
+```{r}
+# Get top 10 genes by LFC
+top_lfc = rownames(dea_results_filtered[order(-abs(dea_results_filtered$log2FoldChange)), ][1:10, ])
+top_10_genes = dea_results_filtered[top_lfc, ]
+write.csv(top_10_genes, "top_10_genes.csv")
+```
+
+
+```{r}
+# Export results as csv
+dea_results_df = as.data.frame(dea_results_filtered)
+write.table(dea_results_df, file="dea_results.txt")
+```
+
+```{r}
+# Create session info
+sessionInfo()
+```
 
 
