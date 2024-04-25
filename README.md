@@ -63,5 +63,5 @@ Table 1 presents the top 10 differentially expressed genes between both cell lin
 
 ## Reference
 
-Su, Angela, Frank Ling, Camille Vaganay, Gaetano Sodaro, Chaïma Benaksas, Reinaldo Dal Bello, Antoine Forget, u. a. „The Folate Cycle Enzyme MTHFR Is a Critical Regulator of Cell Response to MYC-Targeting Therapies“. Cancer Discovery 10, Nr. 12 (1. Dezember 2020): 1894–1911. https://doi.org/10.1158/2159-8290.CD-19-0970.
+Su, Angela, Frank Ling, Camille Vaganay, Gaetano Sodaro, Chaïma Benaksas, Reinaldo Dal Bello, Antoine Forget, *et al.* „The Folate Cycle Enzyme MTHFR Is a Critical Regulator of Cell Response to MYC-Targeting Therapies“. Cancer Discovery 10, Nr. 12: 1894–1911. https://doi.org/10.1158/2159-8290.CD-19-0970.
 
