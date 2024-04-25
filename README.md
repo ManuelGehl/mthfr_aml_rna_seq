@@ -14,7 +14,7 @@ The dataset comprised 12 samples from two different cell lines, **IMS-M2** and *
 
 Genes with fewer than 10 counts in all 12 samples were filtered out, reducing the dataset from approximately 62,000 genes to 23,000 genes. Subsequently, variance-stabilized counts were computed, and the Euclidean distances between samples were calculated (**Fig. 1A**). Additionally, a principal component analysis (PCA) was performed based on the 500 genes with the highest variance across samples (**Fig. 1B**). Both the distance plot and the PCA plot revealed that the expression profiles primarily depended on the cell line rather than the growth condition. Furthermore, it was observed that the effect of folic acid deprivation was much stronger in the U937 cell line than in the IMS-M2 cell line. Consequently, the design formula was adjusted to account for this batch variation.
 
-<img src="https://github.com/ManuelGehl/mthfr_aml_rna_seq/blob/main/figures/Figure_1.png?raw=true" height=400>
+![Figure1](figures/Figure_1.png)
 
 ***Figure 1:*** ***A:*** *Distance plot between different samples.* ***B:*** *PCA plot between different samples based on the 500 most variable genes in the dataset.*
 <br></br>
